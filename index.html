@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAT 答题卡</title>
+<style>
+  :root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1b;--mute:#8a8780;--line:#e4e1d8;--acc:#1f5eff;--accbg:#e8efff;--flag:#e0a100}
+  @media (prefers-color-scheme:dark){:root{--bg:#161614;--card:#201f1d;--ink:#eeece6;--mute:#8f8c84;--line:#34322e;--acc:#6b9bff;--accbg:#22304f;--flag:#f0b72b}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+  h1{font-size:20px;margin:0 0 14px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .bar .sp{flex:1}
+  button{font:inherit;color:inherit;cursor:pointer}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px}
+  .chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .chip.danger:hover{border-color:#d33;color:#d33}
+  input.n{width:56px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:8px;padding:6px 8px;font:inherit}
+  .prog{color:var(--mute);font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px}
+  .row{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px}
+  .row.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--accbg)}
+  .row .q{width:28px;text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
+  .opt{flex:1;height:36px;border:1px solid var(--line);background:transparent;border-radius:8px;font-weight:600}
+  .opt:hover{border-color:var(--acc)}
+  .opt.sel{background:var(--acc);border-color:var(--acc);color:#fff}
+  .fl{width:30px;height:36px;border:none;background:none;color:var(--line);font-size:18px}
+  .fl.on{color:var(--flag)}
+  .out{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .out h2{font-size:14px;margin:0 0 8px;color:var(--mute);font-weight:600}
+  pre{margin:0 0 10px;white-space:pre-wrap;word-break:break-all;font:14px/1.6 ui-monospace,Menlo,Consolas,monospace;user-select:all}
+  .hint{color:var(--mute);font-size:13px;margin:0 0 14px}
+  kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px;background:var(--card)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SAT 答题卡</h1>
+  <div class="bar" id="presets"></div>
+  <p class="hint">点选项作答，再点一次取消。键盘：<kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> 作答并跳到下一题，<kbd>←</kbd><kbd>→</kbd> 换题，<kbd>空格</kbd> 标记存疑，<kbd>Backspace</kbd> 清除并回上一题。</p>
+  <div class="bar">
+    <span>题数</span><input class="n" id="count" type="number" min="1" max="100">
+    <span class="prog" id="prog"></span>
+    <span class="sp"></span>
+    <button class="chip danger" id="reset">清空</button>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="out">
+    <h2>答案（点复制按钮，粘贴到 Word / 老师那里）</h2>
+    <pre id="o1"></pre>
+    <pre id="o2"></pre>
+    <div class="bar" style="margin:0">
+      <button class="chip" data-copy="o1">复制 “1.B 2.A …”</button>
+      <button class="chip" data-copy="o2">复制连续字母</button>
+      <span class="prog" id="cp"></span>
+    </div>
+  </div>
+</div>
+<script>
+const PRESETS=[["RW Module（27题）",27],["Math Module（22题）",22],["RW 全套（54题）",54],["Math 全套（44题）",44]];
+const L=["A","B","C","D"];
+let N=27, ans={}, flag={}, cur=0;
+const KEY="sat-answer-sheet-v1";
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s){N=s.N||27;ans=s.ans||{};flag=s.flag||{}}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({N,ans,flag}))}catch(e){}}
+
+function renderPresets(){
+  const p=document.getElementById("presets");p.innerHTML="";
+  PRESETS.forEach(([t,n])=>{const b=document.createElement("button");b.className="chip"+(n===N?" on":"");b.textContent=t;b.onclick=()=>{setN(n)};p.appendChild(b)});
+}
+function setN(n){N=Math.max(1,Math.min(100,n|0));cur=Math.min(cur,N-1);document.getElementById("count").value=N;save();build()}
+function build(){
+  renderPresets();
+  const g=document.getElementById("grid");g.innerHTML="";
+  for(let i=1;i<=N;i++){
+    const r=document.createElement("div");r.className="row";r.id="r"+i;
+    r.innerHTML=`<span class="q">${i}</span>`+L.map(l=>`<button class="opt" data-q="${i}" data-l="${l}">${l}</button>`).join("")+`<button class="fl" data-f="${i}" title="标记存疑">★</button>`;
+    g.appendChild(r);
+  }
+  refresh();
+}
+function refresh(){
+  let done=0,lines=[],letters=[];
+  for(let i=1;i<=N;i++){
+    const r=document.getElementById("r"+i);if(!r)continue;
+    r.classList.toggle("cur",i-1===cur);
+    r.querySelectorAll(".opt").forEach(b=>b.classList.toggle("sel",ans[i]===b.dataset.l));
+    r.querySelector(".fl").classList.toggle("on",!!flag[i]);
+    if(ans[i])done++;
+    lines.push(i+"."+(ans[i]||"_"));letters.push(ans[i]||"_");
+  }
+  document.getElementById("prog").textContent=`已答 ${done} / ${N}`+(Object.values(flag).some(Boolean)?`　存疑：${Object.keys(flag).filter(k=>flag[k]&&k<=N).join(", ")}`:"");
+  document.getElementById("o1").textContent=lines.join("  ");
+  document.getElementById("o2").textContent=letters.join("");
+}
+function pick(q,l,advance){
+  ans[q]=(ans[q]===l&&!advance)?undefined:l; if(!ans[q])delete ans[q];
+  cur=q-1; if(advance&&cur<N-1)cur++;
+  save();refresh();scroll();
+}
+function scroll(){const r=document.getElementById("r"+(cur+1));if(r)r.scrollIntoView({block:"nearest"})}
+document.getElementById("grid").addEventListener("click",e=>{
+  const o=e.target.closest(".opt");if(o){pick(+o.dataset.q,o.dataset.l,false);return}
+  const f=e.target.closest(".fl");if(f){const q=+f.dataset.f;flag[q]=!flag[q];if(!flag[q])delete flag[q];cur=q-1;save();refresh()}
+});
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key.toUpperCase();
+  if(L.includes(k)){pick(cur+1,k,true);e.preventDefault()}
+  else if(e.key==="ArrowRight"||e.key==="ArrowDown"){cur=Math.min(N-1,cur+1);refresh();scroll();e.preventDefault()}
+  else if(e.key==="ArrowLeft"||e.key==="ArrowUp"){cur=Math.max(0,cur-1);refresh();scroll();e.preventDefault()}
+  else if(e.key===" "){const q=cur+1;flag[q]=!flag[q];if(!flag[q])delete flag[q];save();refresh();e.preventDefault()}
+  else if(e.key==="Backspace"){delete ans[cur+1];if(cur>0)cur--;save();refresh();scroll();e.preventDefault()}
+});
+document.getElementById("count").onchange=e=>setN(+e.target.value||27);
+document.getElementById("reset").onclick=e=>{
+  const b=e.target;
+  if(b.dataset.arm){ans={};flag={};cur=0;save();refresh();b.textContent="清空";delete b.dataset.arm}
+  else{b.dataset.arm=1;b.textContent="再点一次确认清空";setTimeout(()=>{b.textContent="清空";delete b.dataset.arm},2500)}
+};
+document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
+  const t=document.getElementById(b.dataset.copy).textContent,m=document.getElementById("cp");
+  try{await navigator.clipboard.writeText(t);m.textContent="已复制 ✓"}
+  catch(e){const r=document.createRange();r.selectNodeContents(document.getElementById(b.dataset.copy));const s=getSelection();s.removeAllRanges();s.addRange(r);m.textContent="已选中，按 Ctrl/Cmd+C 复制"}
+  setTimeout(()=>m.textContent="",2500);
+});
+document.getElementById("count").value=N;
+build();
+</script>
+</body>
+</html>
